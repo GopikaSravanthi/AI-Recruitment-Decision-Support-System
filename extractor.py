@@ -42,7 +42,39 @@ def extract_candidate_name(text):
 
 
 # --------------------------------
-# CGPA Extraction (NEW FEATURE)
+# Email Extraction
+# --------------------------------
+
+def extract_email(text):
+
+    pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
+
+    match = re.search(pattern, text)
+
+    if match:
+        return match.group(0)
+
+    return "Not Available"
+
+
+# --------------------------------
+# Phone Extraction
+# --------------------------------
+
+def extract_phone(text):
+
+    pattern = r'(\+?\d{1,3}[\s\-]?)?\d{10}'
+
+    match = re.search(pattern, text)
+
+    if match:
+        return match.group(0)
+
+    return "Not Available"
+
+
+# --------------------------------
+# CGPA Extraction
 # --------------------------------
 
 def extract_cgpa(text):
@@ -140,11 +172,17 @@ def read_resumes_from_zip(zip_path, extract_path="temp"):
 
                         name = extract_candidate_name(text)
 
+                        email = extract_email(text)
+
+                        phone = extract_phone(text)
+
                         structured = extract_structured_content(text)
 
                         cgpa = extract_cgpa(text)
 
-                        data.append((name, structured, cgpa))
+                        data.append(
+                            (name, email, phone, structured, cgpa)
+                        )
 
                 except:
                     continue

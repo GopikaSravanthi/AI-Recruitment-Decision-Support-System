@@ -71,7 +71,7 @@ with st.sidebar:
         0, 100, 40
     )
 
-    # ⭐ NEW FEATURE — CGPA Requirement
+    # CGPA Requirement
     min_cgpa = st.slider(
         "Minimum CGPA Requirement",
         0.0, 10.0, 6.5
@@ -115,10 +115,16 @@ if analyze:
         st.error("No valid resumes found inside ZIP.")
         st.stop()
 
-    # ⭐ Now includes CGPA
+    # Create dataframe with new fields
     df = pd.DataFrame(
         data,
-        columns=["Candidate_Name", "Structured_Text", "CGPA"]
+        columns=[
+            "Candidate_Name",
+            "Email",
+            "Phone",
+            "Structured_Text",
+            "CGPA"
+        ]
     )
 
     # --------------------------------

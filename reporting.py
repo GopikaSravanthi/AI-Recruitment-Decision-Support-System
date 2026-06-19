@@ -1,243 +1,262 @@
-import os
-import pandas as pd
-from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+from io import BytesIO
+import pandas as pd
 import zipfile
 
 
-# --------------------------------
-# Individual Candidate PDF
-# --------------------------------
+# ---------------------------------------------------
+# Candidate PDF Report
+# ---------------------------------------------------
 
 def generate_candidate_pdf(row):
 
     buffer = BytesIO()
 
-    doc = SimpleDocTemplate(buffer)
-
-    elements = []
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=(8.5 * inch, 11 * inch),
+        rightMargin=25,
+        leftMargin=25,
+        topMargin=25,
+        bottomMargin=20
+    )
 
     styles = getSampleStyleSheet()
+    elements = []
 
-    elements.append(
-        Paragraph(
-            "<b>Candidate Evaluation Report</b>",
-            styles["Title"]
-        )
+    # ---------------- Styles ----------------
+
+    title = ParagraphStyle(
+        "title",
+        parent=styles["Heading1"],
+        alignment=1,
+        fontSize=20,
+        textColor=colors.HexColor("#1F4E79")
     )
 
-    elements.append(Spacer(1, 0.3 * inch))
-
-    elements.append(
-        Paragraph(
-            f"<b>Name:</b> {row['Candidate_Name']}",
-            styles["Normal"]
-        )
+    subtitle = ParagraphStyle(
+        "subtitle",
+        parent=styles["Heading2"],
+        alignment=1,
+        fontSize=13,
+        textColor=colors.HexColor("#3A5F8A")
     )
 
-    if "CGPA" in row:
-        elements.append(
-            Paragraph(
-                f"<b>CGPA:</b> {row['CGPA']}",
-                styles["Normal"]
-            )
-        )
-
-    elements.append(
-        Paragraph(
-            f"<b>Final Score:</b> {row['Final_Score (%)']}%",
-            styles["Normal"]
-        )
+    section = ParagraphStyle(
+        "section",
+        parent=styles["Normal"],
+        textColor=colors.white,
+        backColor=colors.HexColor("#4F81BD"),
+        fontSize=11,
+        leftIndent=6,
+        spaceBefore=8,
+        spaceAfter=6
     )
 
-    elements.append(
-        Paragraph(
-            f"<b>Eligibility:</b> {row['Eligibility']}",
-            styles["Normal"]
-        )
+    normal = ParagraphStyle(
+        "normal",
+        parent=styles["Normal"],
+        fontSize=9
     )
 
-    elements.append(Spacer(1, 0.3 * inch))
+    # ---------------- Header ----------------
 
-    elements.append(
-        Paragraph(
-            f"<b>Matched Skills:</b> {row['Matched_Skills']}",
-            styles["Normal"]
-        )
+    elements.append(Paragraph("ENTERPRISE AI RECRUITMENT DECISION SYSTEM", subtitle))
+    elements.append(Spacer(1, 4))
+    elements.append(Paragraph("Candidate Evaluation Report", title))
+    elements.append(Spacer(1, 10))
+
+    # ---------------- Candidate Details ----------------
+
+    elements.append(Paragraph("Candidate Details", section))
+
+    details = [
+        ["Name", row.get("Candidate_Name", "N/A")],
+        ["Email", row.get("Email", "N/A")],
+        ["Phone", row.get("Phone", "N/A")]
+    ]
+
+    details_table = Table(details, colWidths=[120, 360])
+    details_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#EEF3F8")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+        ("FONTSIZE", (0, 0), (-1, -1), 9)
+    ]))
+
+    elements.append(details_table)
+    elements.append(Spacer(1, 8))
+
+    # ---------------- Academic + Summary ----------------
+
+    cgpa = row.get("CGPA", "N/A")
+    score = float(row.get("Final_Score (%)", 0))
+    eligibility = row.get("Eligibility", "Not Eligible")
+
+    color = colors.green if eligibility == "Eligible" else colors.red
+
+    academic = [
+        ["CGPA", str(cgpa)],
+        ["Score", f"{score}%"],
+        ["Status", eligibility]
+    ]
+
+    academic_table = Table(academic, colWidths=[120, 120])
+    academic_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#EEF3F8")),
+        ("TEXTCOLOR", (1, 2), (1, 2), color),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.grey)
+    ]))
+
+    summary = [
+        ["Recruitment Summary"],
+        [f"Score : {score}%"],
+        ["CGPA : Qualified"],
+        [f"Status : {eligibility}"]
+    ]
+
+    summary_table = Table(summary, colWidths=[240])
+    summary_table.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 1, colors.grey),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DCE6F1")),
+        ("FONTSIZE", (0, 0), (-1, -1), 9)
+    ]))
+
+    two_column = Table([[academic_table, summary_table]], colWidths=[250, 250])
+    two_column.setStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP")
+    ])
+
+    elements.append(two_column)
+    elements.append(Spacer(1, 8))
+
+    # ---------------- Progress Bar ----------------
+
+    elements.append(Paragraph("Skill Match Percentage", section))
+    elements.append(Paragraph(f"<b>{round(score)}%</b>", normal))
+
+    bar_width = 350
+    filled = (score / 100) * bar_width
+
+    progress = Table(
+        [["", ""]],
+        colWidths=[filled, bar_width - filled],
+        rowHeights=8
     )
 
-    elements.append(
-        Paragraph(
-            f"<b>Missing Skills:</b> {row['Missing_Skills']}",
-            styles["Normal"]
-        )
-    )
+    progress.setStyle([
+        ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#2ecc71")),
+        ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#D3D3D3"))
+    ])
 
-    elements.append(Spacer(1, 0.4 * inch))
+    elements.append(progress)
+    elements.append(Spacer(1, 8))
 
-    # --------------------------------
-    # Skill Weightage Table (NEW)
-    # --------------------------------
+    # ---------------- Skill Analysis ----------------
 
-    matched = row["Matched_Skills"].split(", ") if row["Matched_Skills"] else []
-    missing = row["Missing_Skills"].split(", ") if row["Missing_Skills"] else []
+    elements.append(Paragraph("Skill Analysis", section))
 
-    all_skills = matched + missing
+    matched = row.get("Matched_Skills", "")
+    missing = row.get("Missing_Skills", "")
 
-    if len(all_skills) > 0:
+    elements.append(Paragraph(f"<b>Matched:</b> {matched}", normal))
+    elements.append(Paragraph(f"<b>Missing:</b> {missing}", normal))
+    elements.append(Spacer(1, 6))
 
-        weight = round(100 / len(all_skills), 2)
+    # ---------------- Skill Table ----------------
 
-        table_data = [["Skill", "Weightage", "Candidate Score"]]
+    matched_list = matched.split(", ") if matched else []
+    missing_list = missing.split(", ") if missing else []
 
-        for skill in all_skills:
+    skills = matched_list + missing_list
 
-            score = weight if skill in matched else 0
+    if skills:
 
-            table_data.append([
-                skill,
-                f"{weight}%",
-                f"{score}%"
-            ])
+        weight = round(100 / len(skills), 2)
 
-        table = Table(table_data)
+        data = [["Skill", "Score", "Status"]]
 
-        table.setStyle([
-            ('BACKGROUND',(0,0),(-1,0),colors.grey),
-            ('GRID',(0,0),(-1,-1),0.5,colors.black)
+        for skill in skills:
+            if skill in matched_list:
+                data.append([skill, f"{weight}%", "✔"])
+            else:
+                data.append([skill, "0%", "✖"])
+
+        skill_table = Table(data, colWidths=[220, 100, 80])
+
+        style = TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4F81BD")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+            ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8)
         ])
 
-        elements.append(
-            Paragraph(
-                "<b>Skill Weightage Report</b>",
-                styles["Heading3"]
-            )
-        )
+        # striped rows
+        for i in range(1, len(data)):
+            if i % 2 == 0:
+                style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#F7F9FB"))
 
-        elements.append(Spacer(1,0.2*inch))
+        skill_table.setStyle(style)
 
-        elements.append(table)
+        elements.append(skill_table)
 
     doc.build(elements)
-
     return buffer.getvalue()
 
 
-# --------------------------------
-# Recruiter Summary PDF
-# --------------------------------
+# ---------------------------------------------------
+# Summary PDF
+# ---------------------------------------------------
 
 def generate_summary_pdf(df):
 
     buffer = BytesIO()
-
     doc = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
 
     elements = []
 
-    styles = getSampleStyleSheet()
+    elements.append(Paragraph("Recruitment Summary Report", styles["Title"]))
+    elements.append(Spacer(1, 20))
 
-    elements.append(
-        Paragraph(
-            "<b>Recruitment Summary Report</b>",
-            styles["Title"]
-        )
-    )
-
-    elements.append(Spacer(1,0.3*inch))
-
-    elements.append(
-        Paragraph(
-            f"Total Candidates: {len(df)}",
-            styles["Normal"]
-        )
-    )
-
-    elements.append(
-        Paragraph(
-            f"Eligible: {len(df[df['Eligibility']=='Eligible'])}",
-            styles["Normal"]
-        )
-    )
-
-    elements.append(
-        Paragraph(
-            f"Not Eligible: {len(df[df['Eligibility']=='Not Eligible'])}",
-            styles["Normal"]
-        )
-    )
-
-    elements.append(Spacer(1,0.3*inch))
-
-    table_data = [["Rank","Name","Final Score","Eligibility"]]
-
-    for _, row in df.iterrows():
-
-        table_data.append([
-            row["Rank"],
-            row["Candidate_Name"],
-            f"{row['Final_Score (%)']}%",
-            row["Eligibility"]
-        ])
-
-    table = Table(table_data)
-
-    table.setStyle([
-        ('BACKGROUND',(0,0),(-1,0),colors.grey),
-        ('GRID',(0,0),(-1,-1),0.5,colors.black)
-    ])
-
-    elements.append(table)
+    elements.append(Paragraph(f"Total: {len(df)}", styles["Normal"]))
+    elements.append(Paragraph(f"Eligible: {len(df[df['Eligibility']=='Eligible'])}", styles["Normal"]))
+    elements.append(Paragraph(f"Not Eligible: {len(df[df['Eligibility']=='Not Eligible'])}", styles["Normal"]))
 
     doc.build(elements)
-
     return buffer.getvalue()
 
 
-# --------------------------------
-# Excel Report
-# --------------------------------
+# ---------------------------------------------------
+# Excel Export
+# ---------------------------------------------------
 
 def generate_excel(df):
 
     buffer = BytesIO()
 
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-
-        df[df["Eligibility"]=="Eligible"].to_excel(
-            writer,
-            sheet_name="Eligible",
-            index=False
-        )
-
-        df[df["Eligibility"]=="Not Eligible"].to_excel(
-            writer,
-            sheet_name="Not_Eligible",
-            index=False
-        )
+        df[df["Eligibility"]=="Eligible"].to_excel(writer, sheet_name="Eligible", index=False)
+        df[df["Eligibility"]=="Not Eligible"].to_excel(writer, sheet_name="Not_Eligible", index=False)
 
     return buffer.getvalue()
 
 
-# --------------------------------
-# Zip All Individual PDFs
-# --------------------------------
+# ---------------------------------------------------
+# ZIP Export
+# ---------------------------------------------------
 
 def generate_all_reports_zip(df):
 
     zip_buffer = BytesIO()
 
-    with zipfile.ZipFile(zip_buffer, "w") as zf:
-
+    with zipfile.ZipFile(zip_buffer,"w") as zf:
         for _, row in df.iterrows():
-
             pdf_bytes = generate_candidate_pdf(row)
-
             filename = f"{row['Candidate_Name'].replace(' ','_')}_Report.pdf"
-
             zf.writestr(filename, pdf_bytes)
 
     return zip_buffer.getvalue()
